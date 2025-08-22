@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Happy 26th Birthday Game 🎂❤️</title>
+  <style>
+    :root { --pink:#e91e63; --pink-dark:#ad1457; --bg:#fce4ec; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      text-align: center;
+      color: #222;
+    }
+    header {
+      padding: 12px 10px 4px;
+    }
+    h2 { margin: 6px 0 0; font-weight: 800; }
+    p.helper { margin: 6px 0 12px; opacity: .8; font-size: 14px; }
+    canvas { display: block; margin: auto; }
+    /* Touch buttons for phones */
+    .touch-controls {
+      display: flex;
+      justify-content: space-between;
+      margin: 10px auto 18px;
+      width: min(90vw, 360px);
+      gap: 10px;
+    }
+    .btn {
+      background: var(--pink);
+      color: white;
+      border: none;
+      padding: 14px 20px;
+      font-size: 20px;
+      border-radius: 12px;
+      cursor: pointer;
+      flex: 1;
+      box-shadow: 0 4px 10px rgba(0,0,0,.15);
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    .btn:active { background: var(--pink-dark); }
+    /* Start overlay (helps auto-play on iOS/Android) */
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(252, 228, 236, .96);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 12px;
+      z-index: 10;
+      padding: 20px;
+    }
+    .overlay .title {
+      font-size: 22px; font-weight: 800; margin-bottom: 6px;
+    }
+    .overlay .desc {
+      font-size: 14px; opacity: .8; max-width: 520px;
+    }
+    .overlay .start-btn {
+      background: var(--pink);
+      color: #fff;
+      border: none;
+      border-radius: 999px;
+      padding: 12px 22px;
+      font-size: 18px;
+      cursor: pointer;
+      box-shadow: 0 6px 16px rgba(0,0,0,.2);
+    }
+    .overlay .start-btn:active { background: var(--pink-dark); }
+    footer {
+      font-size: 12px; opacity: .7; padding-bottom: 16px;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.js"></script>
+</head>
+<body>
+  <header>
+    <h2>🎉 Catch 26 Hearts for Your Birthday Surprise 🎉</h2>
+    <p class="helper">Gunakan tombol panah (← →) atau tombol sentuh di bawah untuk bergerak. Tangkap 26 hati untuk membuka pesan spesial!</p>
+  </header>
+  <div id="game"></div>
+
+  <!-- Touch buttons for phones -->
+  <div class="touch-controls">
+    <button class="btn" id="leftBtn">⬅️</button>
+    <button class="btn" id="rightBtn">➡️</button>
+  </div>
+
+  <!-- Tappable overlay to satisfy mobile audio policies -->
+  <div class="overlay" id="startOverlay" role="dialog" aria-label="Start">
+    <div class="title">Ready to Celebrate? 🥰</div>
+    <div class="desc">Tap tombol di bawah untuk mulai game dan memutar musik romantis di background.</div>
+    <button class="start-btn" id="startBtn">Start Game</button>
+  </div>
+
+  <footer>© Your Surprise • Made with ❤️</footer>
+
+  <script>
+    const config = {
+      type: Phaser.AUTO,
+      width: 420,
+      height: 680,
+      parent: "game",
+      physics: { default: "arcade", arcade: { gravity: { y: 230 }, debug: false } },
+      scene: { preload, create, update }
+    };
+
+    let player, hearts, cursors, music;
+    let score = 0;
+    let scoreText;
+    let moveLeft = false, moveRight = false;
+
+    const game = new Phaser.Game(config);
+
+    function preload() {
+      // You can replace these assets with your own URLs later
+      this.load.image("player", "https://i.ibb.co/p1cLkR0/player.png");
+      this.load.image("heart", "https://i.ibb.co/k5m2P2h/heart.png");
+      this.load.image("bg", "https://i.ibb.co/X8wPCkq/bg.jpg");
+      // Royalty-free romantic loop (Pixabay)
+      this.load.audio("bgmusic", "https://cdn.pixabay.com/download/audio/2022/03/15/audio_bf8b95f1a1.mp3?filename=romantic-music-11085.mp3");
+      // Simple "ding" when catching a heart
+      this.load.audio("ding", "https://cdn.pixabay.com/download/audio/2021/08/04/audio_3b9fd8c7b8.mp3?filename=correct-2-46134.mp3");
+      // Confetti spritesheet (tiny particles simulated with graphics, no external sprite)
+    }
+
+    function create() {
+      const cx = this.scale.width / 2;
+      const cy = this.scale.height / 2;
+
+      this.add.image(cx, cy, "bg").setScale(0.52);
+
+      player = this.physics.add.image(cx, this.scale.height - 70, "player").setScale(0.32);
+      player.setCollideWorldBounds(true);
+
+      hearts = this.physics.add.group({ key: "heart", repeat: 0, setXY: { x: Phaser.Math.Between(50, this.scale.width - 50), y: 0 } });
+      hearts.children.iterate(child => child.setScale(0.8));
+
+      this.physics.add.collider(player, hearts, collectHeart, null, this);
+
+      cursors = this.input.keyboard.createCursorKeys();
+
+      scoreText = this.add.text(10, 10, "Score: 0 / 26", { fontSize: "20px", color: "#111", fontStyle: "bold" });
+
+      music = this.sound.add("bgmusic", { loop: true, volume: 0.5 });
+      // Music will be started by a user gesture via the overlay button
+      const startBtn = document.getElementById("startBtn");
+      const overlay = document.getElementById("startOverlay");
+      const startMusic = () => {
+        try { music.play(); } catch(e) {}
+        overlay.style.display = "none";
+      };
+      startBtn.addEventListener("click", startMusic, { once: true });
+      // Also allow starting via any first touch/click as fallback
+      const onceStart = () => { if (overlay.style.display !== "none") { startMusic(); } };
+      document.body.addEventListener("touchstart", onceStart, { once: true });
+      document.body.addEventListener("mousedown", onceStart, { once: true });
+
+      // Touch controls
+      const leftBtn = document.getElementById("leftBtn");
+      const rightBtn = document.getElementById("rightBtn");
+      const on = (el, ev, fn) => el.addEventListener(ev, fn, { passive: true });
+      on(leftBtn, "touchstart", () => moveLeft = true);
+      on(leftBtn, "touchend", () => moveLeft = false);
+      on(rightBtn, "touchstart", () => moveRight = true);
+      on(rightBtn, "touchend", () => moveRight = false);
+      // Also support mouse press (for desktop clicks)
+      on(leftBtn, "mousedown", () => moveLeft = true);
+      on(leftBtn, "mouseup", () => moveLeft = false);
+      on(rightBtn, "mousedown", () => moveRight = true);
+      on(rightBtn, "mouseup", () => moveRight = false);
+    }
+
+    function update() {
+      const speed = 250;
+      if (cursors.left.isDown || moveLeft) {
+        player.setVelocityX(-speed);
+      } else if (cursors.right.isDown || moveRight) {
+        player.setVelocityX(speed);
+      } else {
+        player.setVelocityX(0);
+      }
+
+      // Respawn hearts if they fall
+      hearts.children.iterate(function (child) {
+        if (child.y > 720) {
+          child.y = 0;
+          child.x = Phaser.Math.Between(40, 380);
+        }
+      });
+    }
+
+    function collectHeart(player, heart) {
+      heart.y = 0;
+      heart.x = Phaser.Math.Between(40, 380);
+      score++;
+      scoreText.setText("Score: " + score + " / 26");
+      const ding = player.scene.sound.add("ding", { volume: 0.4 });
+      ding.play();
+
+      if (score >= 26) endGame(player.scene);
+    }
+
+    function endGame(scene) {
+      scene.physics.pause();
+      player.setTint(0xff69b4);
+
+      const cx = scene.scale.width / 2;
+      scene.add.text(36, 250, "🎂 Happy 26th Birthday! 🎂", {
+        fontSize: "26px", color: "#e91e63", fontStyle: "bold"
+      });
+      scene.add.text(52, 292, "I love you forever 💖", {
+        fontSize: "20px", color: "#880e4f"
+      });
+
+      // Simple confetti using particle emitter
+      const particles = scene.add.particles(0, 0, null, {
+        x: { min: 0, max: scene.scale.width },
+        y: 0,
+        lifespan: 2200,
+        speed: { min: 100, max: 240 },
+        scale: { start: 0.8, end: 0.2 },
+        gravityY: 300,
+        blendMode: 'NORMAL',
+        emitting: false
+      });
+
+      // Create graphics texture for particle (small square)
+      const g = scene.add.graphics();
+      g.fillStyle(0xffffff, 1); g.fillRect(0,0,6,6);
+      g.generateTexture('confetti0', 6, 6);
+      g.clear();
+      g.fillStyle(0xe91e63, 1); g.fillRect(0,0,6,6);
+      g.generateTexture('confetti1', 6, 6);
+      g.clear();
+      g.fillStyle(0xffc107, 1); g.fillRect(0,0,6,6);
+      g.generateTexture('confetti2', 6, 6);
+      g.clear();
+      g.fillStyle(0x4caf50, 1); g.fillRect(0,0,6,6);
+      g.generateTexture('confetti3', 6, 6);
+      g.destroy();
+
+      particles.setTexture(['confetti0','confetti1','confetti2','confetti3']);
+      particles.setPosition(cx, 0);
+      particles.setEmitZone({ type: 'random', source: new Phaser.Geom.Rectangle(0, 0, scene.scale.width, 10) });
+      particles.start();
+
+      // Stop music after a smooth delay
+      if (music) {
+        scene.tweens.add({
+          targets: music,
+          volume: 0,
+          duration: 1200,
+          onComplete: () => music.stop()
+        });
+      }
+    }
+  </script>
+</body>
+</html>
